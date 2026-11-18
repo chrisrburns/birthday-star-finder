@@ -1,0 +1,783 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Birthday Star Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,500;0,700;1,500&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: almanac-style instrument page. Control column + dark sky dome, then the full ephemeris table. */
+:root{
+  --bg:#f2f4f8; --panel:#ffffff; --ink:#18213a; --muted:#5a6580; --line:#d6dbe6;
+  --accent:#8a5a00; --accent-soft:#f4e7c7; --sel:#2b5cb8; --sel-soft:#e3ebfb;
+  --good:#1e7a4c; --warn:#9a5b00;
+  --sky:#070b19; --sky-ring:rgba(160,178,225,.22); --sky-text:#97a3c2; --sky-limit:rgba(240,182,83,.55);
+  --f-display:"Libre Bodoni","Bodoni 72",Didot,Georgia,serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0a0f1e; --panel:#111a2e; --ink:#e5e9f3; --muted:#8f9ab4; --line:#233049;
+  --accent:#f0b653; --accent-soft:#3a2c12; --sel:#86a9ff; --sel-soft:#1b2a4d;
+  --good:#5fd09a; --warn:#f0b653; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0a0f1e; --panel:#111a2e; --ink:#e5e9f3; --muted:#8f9ab4; --line:#233049;
+  --accent:#f0b653; --accent-soft:#3a2c12; --sel:#86a9ff; --sel-soft:#1b2a4d;
+  --good:#5fd09a; --warn:#f0b653; color-scheme:dark;
+}
+html.nightvision{ filter: grayscale(1) sepia(1) saturate(5) hue-rotate(-45deg) brightness(.75); }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+fieldset>.field{flex:0 0 auto}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+.wrap{max-width:1320px;margin:0 auto}
+h1,h2{font-family:var(--f-display);font-weight:500;text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.01em}
+h1 em{color:var(--accent);font-style:italic}
+h2{font-size:20px}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;padding-block:24px 16px;border-bottom:1px solid var(--line)}
+.top p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.toggle{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
+.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+
+.summary{display:flex;flex-wrap:wrap;gap:0;margin-block:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}
+.summary .ev{flex:1 1 120px;padding:10px 14px;border-right:1px solid var(--line);min-width:0}
+.summary .ev:last-child{border-right:0}
+.summary .v{font-family:var(--f-mono);font-size:17px;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+.summary .ev.dark{background:var(--accent-soft)}
+.summary .sub{font-size:12px;color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:minmax(0,370px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+.controls{display:flex;flex-direction:column;gap:12px;min-width:0}
+fieldset{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);margin:0;padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+legend{padding:0 6px;margin-left:-6px;font-family:var(--f-display);font-size:16px}
+legend .step{font-family:var(--f-mono);font-size:11px;color:var(--accent);margin-right:6px;vertical-align:1px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>label,.field{display:flex;flex-direction:column;gap:4px;flex:1 1 110px;min-width:0}
+.field>span,.row>label>span{font-size:12px;color:var(--muted)}
+input[type=date],input[type=time],input[type=number],input[type=text],input[type=search],select{
+  width:100%;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg);font-variant-numeric:tabular-nums}
+input:hover,select:hover{border-color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--bg);border-radius:5px;padding:7px 11px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--panel)}
+.note{font-size:12px;color:var(--muted);margin:0}
+.note.warn{color:var(--warn)}
+.siteinfo{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+
+.hist{position:relative;height:74px}
+.hist canvas{position:absolute;inset:0 0 18px 0;width:100%;height:56px}
+.dual{position:absolute;left:0;right:0;bottom:0;height:22px}
+.dual input[type=range]{position:absolute;inset:0;width:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none;height:22px}
+.dual input[type=range]::-webkit-slider-runnable-track{background:transparent;height:22px}
+.dual input[type=range]::-moz-range-track{background:transparent}
+.dual input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:16px;height:16px;margin-top:3px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--accent);cursor:grab}
+.dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--accent);cursor:grab}
+.bday{border-top:1px dashed var(--line);padding-top:10px}
+
+.skypanel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.skycard{background:var(--sky);border-radius:var(--r);padding:14px;color:#dfe5f5;display:flex;flex-direction:column;gap:10px}
+.skyhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.skyhead h2{color:#eef1f8}
+.skyhead .mono{color:#f0b653;font-size:15px}
+.skywrap{position:relative;width:100%;max-width:560px;margin:0 auto;aspect-ratio:1}
+.skywrap canvas{width:100%;height:100%;display:block;cursor:crosshair}
+.tip{position:absolute;pointer-events:none;background:rgba(10,15,30,.92);border:1px solid rgba(160,178,225,.35);color:#e8ecf6;border-radius:5px;padding:5px 8px;font-size:12px;white-space:nowrap;transform:translate(-50%,calc(-100% - 10px))}
+.skyctl{display:flex;gap:10px;align-items:center}
+.skyctl input[type=range]{flex:1;accent-color:#f0b653;min-width:0}
+.skyctl .btn{background:transparent;border-color:rgba(160,178,225,.3);color:#dfe5f5;font-size:12px;padding:5px 9px}
+.skyctl .btn:hover{border-color:#f0b653;color:#f0b653}
+.skylegend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sky-text);align-items:center}
+.ramp{display:inline-block;width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#9db4ff,#e4ecff,#fff3df,#ffd7a3,#ffb36b,#ff8546);vertical-align:middle;margin:0 6px}
+
+.detail{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.detail h2{display:flex;align-items:center;gap:10px}
+.detail .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px}
+.detail .kv div{min-width:0}
+.detail .kv .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:13px;overflow-wrap:anywhere}
+.detail canvas{width:100%;height:150px;display:block}
+.detail a{color:var(--sel)}
+.chip{display:inline-block;width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.25);flex:none}
+
+.maincol{display:flex;flex-direction:column;gap:20px;min-width:0}
+.results{display:flex;flex-direction:column;gap:10px}
+.rbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.count{font-family:var(--f-display);font-size:22px}
+.count b{font-family:var(--f-mono);font-weight:500;color:var(--accent)}
+.rtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rtools input{width:220px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);max-height:70vh}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--panel);z-index:1;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;cursor:pointer;user-select:none;box-shadow:inset 0 -1px 0 var(--line)}
+th:hover{color:var(--ink)}
+th[aria-sort="ascending"]::after{content:" ▲";color:var(--accent)}
+th[aria-sort="descending"]::after{content:" ▼";color:var(--accent)}
+td.n,th.n{text-align:right}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--bg)}
+tbody tr.sel{background:var(--sel-soft)}
+.sname{display:flex;align-items:center;gap:8px}
+.sname small{display:block;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.bar{display:inline-block;height:6px;border-radius:3px;background:var(--accent);vertical-align:middle;margin-right:6px;opacity:.8}
+td small.band{display:inline-block;width:3.6em;margin-left:4px;text-align:left;font-size:10px;color:var(--muted);font-family:var(--f-body)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.loadbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.loadbox label.btn{font-size:12px}
+.loadbox input[type=file]{display:none}
+footer{margin-top:28px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);font-size:12.5px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 28px}
+footer p{margin:0;max-width:65ch}
+footer b{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Birthday <em>Star</em> Finder</h1>
+      <p id="catline">Stars within 100 light-years, filtered by distance and by what clears the horizon from your observatory tonight.</p>
+    </div>
+    <button type="button" class="toggle" id="nv" aria-pressed="false" title="Turn the whole page red to protect dark adaptation">● Night vision</button>
+  </header>
+
+  <section class="summary" id="summary" aria-live="polite"></section>
+
+  <div class="grid">
+    <form class="controls" id="controls" autocomplete="off">
+      <fieldset>
+        <legend><span class="step">1</span>Observatory</legend>
+        <label class="field"><span>Site</span><select id="site"></select></label>
+        <div id="custom" class="row" hidden>
+          <label><span>Latitude °</span><input type="number" id="clat" step="0.0001" min="-90" max="90" value="34.1478"></label>
+          <label><span>Longitude ° (east +)</span><input type="number" id="clon" step="0.0001" min="-180" max="180" value="-118.1445"></label>
+          <label style="flex-basis:100%"><span>Time zone</span><input type="text" id="ctz" list="tzlist" value="America/Los_Angeles"></label>
+          <datalist id="tzlist"></datalist>
+        </div>
+        <div class="siteinfo" id="siteinfo"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">2</span>Night of</legend>
+        <div class="row">
+          <label><span>Date (evening of)</span><input type="date" id="date"></label>
+          <button type="button" class="btn" id="today">Tonight</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">3</span>Observing window</legend>
+        <label class="field"><span>Default to the end of</span>
+          <select id="twi">
+            <option value="-6">Civil twilight (Sun −6°)</option>
+            <option value="-12">Nautical twilight (Sun −12°)</option>
+            <option value="-18" selected>Astronomical twilight (Sun −18°)</option>
+          </select>
+        </label>
+        <div class="row">
+          <label><span>From (site time)</span><input type="time" id="t0"></label>
+          <label><span>To (next morning)</span><input type="time" id="t1"></label>
+        </div>
+        <div class="row" style="align-items:center;justify-content:space-between">
+          <p class="note" id="winnote"></p>
+          <button type="button" class="btn" id="resetwin">Reset to twilight</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">4</span>Distance</legend>
+        <div class="hist">
+          <canvas id="hist" aria-hidden="true"></canvas>
+          <div class="dual">
+            <input type="range" id="rmin" min="0" max="100" step="0.5" value="0" aria-label="Minimum distance">
+            <input type="range" id="rmax" min="0" max="100" step="0.5" value="100" aria-label="Maximum distance">
+          </div>
+        </div>
+        <div class="row">
+          <label><span>Nearest (ly)</span><input type="number" id="dmin" min="0" step="0.5" value="0"></label>
+          <label><span>Farthest (ly)</span><input type="number" id="dmax" min="0" step="0.5" value="100"></label>
+        </div>
+        <div class="bday">
+          <div class="row">
+            <label><span>Birthday star: your birth date</span><input type="date" id="bday"></label>
+            <button type="button" class="btn primary" id="bdaygo">Find mine</button>
+          </div>
+          <p class="note" id="bdaynote">Sets the range to stars whose light left them within half a year of your birth.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">5</span>Visibility</legend>
+        <div class="row">
+          <label><span>Above altitude (°)</span><input type="number" id="minalt" min="0" max="89" step="1" value="30"></label>
+          <label><span>For at least</span>
+            <select id="need">
+              <option value="0" selected>Any moment</option>
+              <option value="0.5">30 minutes</option>
+              <option value="1">1 hour</option>
+              <option value="2">2 hours</option>
+              <option value="4">4 hours</option>
+              <option value="all">The whole window</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label><span>Max hour angle (± h)</span><input type="number" id="maxha" min="0" max="12" step="0.25" placeholder="No limit"></label>
+          <label><span>Brighter than mag (V, else G)</span><input type="number" id="gmax" min="-2" max="25" step="0.5" value="12"></label>
+        </div>
+        <p class="note" id="airmass"></p>
+      </fieldset>
+
+      <div class="loadbox">
+        <span id="catsrc">Catalog: built-in</span>
+        <label class="btn" for="file">Load another CSV…</label>
+        <input type="file" id="file" accept=".csv,text/csv">
+      </div>
+    </form>
+
+    <div class="maincol">
+      <section class="results">
+    <div class="rbar">
+      <div class="count" id="count"></div>
+      <div class="rtools">
+        <input type="search" id="q" placeholder="Filter by name, HD, HIP or Gaia ID">
+        <button type="button" class="btn" id="copy">Copy table as CSV</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead><tr>
+          <th data-k="name">Star</th>
+          <th data-k="raD" class="n" id="thra">RA (of date)</th>
+          <th data-k="decD" class="n" id="thdec">Dec (of date)</th>
+          <th data-k="dist" class="n">Dist (ly)</th>
+          <th data-k="mag" class="n" title="V magnitude where available, otherwise Gaia G">Mag</th>
+          <th data-k="ci" class="n" title="Gaia BP−RP where available, otherwise B−V">Colour</th>
+          <th data-k="maxAlt" class="n">Max alt</th>
+          <th data-k="tBest" class="n">Highest at</th>
+          <th data-k="hrs" class="n" title="Time above the altitude limit and inside the hour-angle limit">Observable</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+      <section class="skypanel">
+      <div class="detail" id="detail"></div>
+      <div class="skycard">
+        <div class="skyhead">
+          <h2>Sky at <span class="mono" id="skytime">—</span></h2>
+          <span class="skylegend" id="skycount"></span>
+        </div>
+        <div class="skywrap" id="skywrap">
+          <canvas id="sky" role="img" aria-label="All-sky map of matching stars at the chosen time"></canvas>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <div class="skyctl">
+          <button type="button" class="btn" id="play" aria-pressed="false">▶ Play</button>
+          <input type="range" id="skyT" min="0" max="1000" value="500" aria-label="Time within the observing window">
+        </div>
+        <div class="skylegend">
+          <span>Colour = BP−RP (or B−V)<span class="ramp"></span>red dwarfs</span>
+          <span>Size = brightness</span>
+          <span>Dashed ring = your altitude limit</span>
+          <span>Faint dots = outside your altitude or hour-angle limit</span>
+        </div>
+      </div>
+    </section>
+    </div>
+  </div>
+
+
+
+  <footer>
+    <p><b>How visibility is decided.</b> Each star's catalog position (epoch J2016.0) is moved by its proper motion to the observing date and precessed to that date. These precessed coordinates (mean equinox of the observing night) are what the table lists. Its altitude is then sampled at least every five minutes through the window. A star qualifies when, for the required time, it is both above your altitude limit and within your hour-angle limit (time from the meridian; leave it blank for no limit). "Max alt" and "Highest at" refer to that observable stretch. Refraction is ignored, which makes stars near the horizon appear up to about half a degree lower than they really are.</p>
+    <p><b>Twilight and the Moon.</b> Sun and Moon positions use low-precision formulas good to about a minute of time for twilight. The window runs from evening to morning twilight on the night that begins on the chosen date, in the observatory's own time zone. Where the Sun never gets that low (high latitudes in summer), the next shallower twilight is used instead.</p>
+    <p><b>About this catalog.</b> <span id="catstats"></span> Very bright stars saturate Gaia's detectors, so <span id="nhip"></span> stars have no Gaia source and come from other catalogs. Each star is labelled by its name from the file where there is one (Bayer or Flamsteed designation, such as α CMa or 35 Leo), otherwise by its HD, HIP or Gaia DR3 number, in that order. Magnitudes are V where available and Gaia G otherwise; colours are Gaia BP−RP where available and B−V otherwise, and the table marks which. SIMBAD links use the Gaia DR3 identifier, or the HIP or HD number for stars without one.</p>
+  </footer>
+</div>
+
+<script type="text/plain" id="catalog-csv">/*CSV*/</script>
+<script>
+"use strict";
+// ---------- reference data ----------
+const SITES = [
+  ["North America", [
+    ["mtwilson","Mount Wilson Observatory, CA",34.2258,-118.0570,1742,"America/Los_Angeles"],
+    ["palomar","Palomar Observatory, CA",33.3563,-116.8650,1712,"America/Los_Angeles"],
+    ["lick","Lick Observatory, CA",37.3414,-121.6429,1283,"America/Los_Angeles"],
+    ["kittpeak","Kitt Peak National Observatory, AZ",31.9583,-111.5967,2096,"America/Phoenix"],
+    ["hopkins","Fred L. Whipple Obs. (Mt Hopkins), AZ",31.6810,-110.8783,2617,"America/Phoenix"],
+    ["mtgraham","Mount Graham (LBT), AZ",32.7016,-109.8891,3221,"America/Phoenix"],
+    ["lowell","Lowell Observatory, Flagstaff, AZ",35.2029,-111.6646,2210,"America/Phoenix"],
+    ["apo","Apache Point Observatory, NM",32.7803,-105.8203,2788,"America/Denver"],
+    ["mcdonald","McDonald Observatory, TX",30.6714,-104.0225,2070,"America/Chicago"],
+    ["yerkes","Yerkes Observatory, WI",42.5703,-88.5564,334,"America/Chicago"],
+  ]],
+  ["Hawaiʻi", [
+    ["maunakea","Maunakea Observatories",19.8207,-155.4681,4205,"Pacific/Honolulu"],
+    ["haleakala","Haleakalā Observatory, Maui",20.7083,-156.2571,3055,"Pacific/Honolulu"],
+  ]],
+  ["Chile", [
+    ["lco","Las Campanas Observatory",-29.0146,-70.6926,2380,"America/Santiago"],
+    ["ctio","Cerro Tololo (CTIO)",-30.1691,-70.8063,2207,"America/Santiago"],
+    ["pachon","Cerro Pachón (Rubin, Gemini South)",-30.2407,-70.7366,2715,"America/Santiago"],
+    ["lasilla","La Silla Observatory (ESO)",-29.2567,-70.7346,2400,"America/Santiago"],
+    ["paranal","Paranal Observatory (ESO VLT)",-24.6272,-70.4042,2635,"America/Santiago"],
+  ]],
+  ["Europe & Africa", [
+    ["lapalma","Roque de los Muchachos, La Palma",28.7606,-17.8816,2396,"Atlantic/Canary"],
+    ["calaralto","Calar Alto Observatory, Spain",37.2236,-2.5463,2168,"Europe/Madrid"],
+    ["picdumidi","Pic du Midi Observatory, France",42.9364,0.1425,2877,"Europe/Paris"],
+    ["greenwich","Royal Observatory Greenwich, UK",51.4769,-0.0005,46,"Europe/London"],
+    ["saao","SAAO Sutherland, South Africa",-32.3794,20.8107,1798,"Africa/Johannesburg"],
+  ]],
+  ["Asia & Oceania", [
+    ["devasthal","Devasthal Observatory (ARIES), India",29.3611,79.6844,2450,"Asia/Kolkata"],
+    ["xinglong","Xinglong Station, China",40.3958,117.5750,900,"Asia/Shanghai"],
+    ["sidingspring","Siding Spring Observatory, Australia",-31.2733,149.0617,1165,"Australia/Sydney"],
+    ["mtjohn","Mt John Observatory, New Zealand",-43.9856,170.4650,1029,"Pacific/Auckland"],
+  ]],
+];
+// ---------- astronomy ----------
+const D2R=Math.PI/180, R2D=180/Math.PI, HOUR=3600e3, MIN=60e3, DAY=86400e3;
+const jd = ms => ms/DAY + 2440587.5;
+function gmstRad(ms){ const d=jd(ms)-2451545, T=d/36525;
+  let g=280.46061837+360.98564736629*d+0.000387933*T*T; g=((g%360)+360)%360; return g*D2R; }
+function sunRaDec(ms){ const d=jd(ms)-2451545;
+  const g=(357.529+0.98560028*d)*D2R, q=280.459+0.98564736*d;
+  const L=(q+1.915*Math.sin(g)+0.020*Math.sin(2*g))*D2R, e=(23.439-0.00000036*d)*D2R;
+  return [Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)), Math.asin(Math.sin(e)*Math.sin(L))]; }
+function sunAlt(ms,site){ const [ra,dec]=sunRaDec(ms); const H=gmstRad(ms)+site.lon*D2R-ra;
+  return Math.asin(Math.sin(site.lat*D2R)*Math.sin(dec)+Math.cos(site.lat*D2R)*Math.cos(dec)*Math.cos(H))*R2D; }
+function moonIllum(ms){ const T=(jd(ms)-2451545)/36525;
+  const D=(297.8501921+445267.1114034*T)*D2R, M=(357.5291092+35999.0502909*T)*D2R, Mp=(134.9633964+477198.8675055*T)*D2R;
+  const i=180-D*R2D-6.289*Math.sin(Mp)+2.100*Math.sin(M)-1.274*Math.sin(2*D-Mp)-0.658*Math.sin(2*D)-0.214*Math.sin(2*Mp)-0.110*Math.sin(D);
+  const k=(1+Math.cos(i*D2R))/2; const el=((D*R2D)%360+360)%360; return {k, waxing: el<180}; }
+function apparent(s, ms){ // proper motion from the catalog epoch (Gaia J2016.0, Hipparcos J1991.25), then precession J2000 -> date (IAU 1976)
+  const yrs=(jd(ms)-s.ep)/365.25;
+  let dec=s.dec+s.pmde/3.6e6*yrs; let ra=s.ra+s.pmra/Math.cos(s.dec*D2R)/3.6e6*yrs;
+  const T=(jd(ms)-2451545)/36525, as=D2R/3600;
+  const zeta=(2306.2181*T+0.30188*T*T+0.017998*T*T*T)*as, z=(2306.2181*T+1.09468*T*T+0.018203*T*T*T)*as,
+        th=(2004.3109*T-0.42665*T*T-0.041833*T*T*T)*as;
+  const a0=ra*D2R, d0=dec*D2R;
+  const A=Math.cos(d0)*Math.sin(a0+zeta), B=Math.cos(th)*Math.cos(d0)*Math.cos(a0+zeta)-Math.sin(th)*Math.sin(d0),
+        C=Math.sin(th)*Math.cos(d0)*Math.cos(a0+zeta)+Math.cos(th)*Math.sin(d0);
+  return [Math.atan2(A,B)+z, Math.asin(C)]; }
+function altAz(ra,dec,lst,lat){ const H=lst-ra, sl=Math.sin(lat), cl=Math.cos(lat);
+  const sa=sl*Math.sin(dec)+cl*Math.cos(dec)*Math.cos(H), alt=Math.asin(sa);
+  const az=Math.atan2(Math.sin(H), Math.cos(H)*sl-Math.tan(dec)*cl)+Math.PI; return [alt,az]; }
+
+// crossings of Sun altitude h between local solar noon and next noon
+function sunCross(t0, site, h){ const step=5*MIN, n=288; let prev=sunAlt(t0,site), set=null, rise=null;
+  const bis=(a,b,up)=>{ for(let k=0;k<22;k++){ const m=(a+b)/2, v=sunAlt(m,site)-h; if((v>0)!==up) a=m; else b=m; } return (a+b)/2; };
+  for(let i=1;i<=n;i++){ const t=t0+i*step, v=sunAlt(t,site);
+    if(set===null && prev>=h && v<h) set=bis(t-step,t,false);
+    else if(set!==null && rise===null && prev<h && v>=h) rise=bis(t-step,t,true);
+    prev=v; }
+  return {set, rise}; }
+
+// ---------- time zones ----------
+const fmtCache=new Map();
+function fmt(tz,opts,loc="en-GB"){ const k=tz+JSON.stringify(opts)+loc; if(!fmtCache.has(k)) fmtCache.set(k,new Intl.DateTimeFormat(loc,{timeZone:tz,...opts})); return fmtCache.get(k); }
+function validTz(tz){ try{ new Intl.DateTimeFormat("en",{timeZone:tz}); return true; }catch(e){ return false; } }
+function tzOffset(ms,tz){ const p={}; for(const x of fmt(tz,{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"},"en-US").formatToParts(new Date(ms))) p[x.type]=x.value;
+  return Date.UTC(+p.year,+p.month-1,+p.day,(+p.hour)%24,+p.minute,+p.second)-Math.floor(ms/1000)*1000; }
+function zonedToUtc(y,mo,d,h,mi,tz){ const g=Date.UTC(y,mo-1,d,h,mi); const o1=tzOffset(g,tz); let t=g-o1; const o2=tzOffset(t,tz); if(o2!==o1) t=g-o2; return t; }
+const hm = (ms,tz) => fmt(tz,{hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(ms));
+const ymd = (ms,tz) => fmt(tz,{year:"numeric",month:"2-digit",day:"2-digit"},"en-CA").format(new Date(ms));
+function tzAbbr(ms,tz){ const p=fmt(tz,{timeZoneName:"short"},"en-US").formatToParts(new Date(ms)).find(x=>x.type==="timeZoneName"); return p?p.value:tz; }
+const longDate = (ms,tz) => fmt(tz,{weekday:"short",day:"numeric",month:"short",year:"numeric"}).format(new Date(ms));
+
+// ---------- catalog ----------
+let STARS=[], CATNAME="/*CATNAME*/ (built in)";
+// CSV with quoted fields; returns one object per row keyed by trimmed header
+function parseCsv(text){
+  const rows=[]; let row=[], f="", q=false;
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=""; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(f); f=""; if(row.some(x=>x.trim()!=="")) rows.push(row); row=[]; }
+    else f+=c; }
+  row.push(f); if(row.some(x=>x.trim()!=="")) rows.push(row);
+  if(rows.length<2) throw new Error("That file has no data rows.");
+  const head=rows[0].map(h=>h.trim().replace(/^﻿/,""));
+  const find=(...names)=>{ for(const n of names){ const i=head.findIndex(h=>h.toLowerCase()===n.toLowerCase()); if(i>=0) return i; } return -1; };
+  const C={ra:find("RA_ICRS","RA"),dec:find("DE_ICRS","DEC","DE"),plx:find("Plx","parallax"),eplx:find("e_Plx"),pmra:find("pmRA"),pmde:find("pmDE"),
+    g:find("Gmag"),v:find("Vmag"),bprp:find("BP-RP","BP_RP"),bv:find("B-V","B_V","BV"),src:find("Source"),hip:find("HIP"),hd:find("HD"),name:find("Name")};
+  for(const k of ["ra","dec","plx"]) if(C[k]<0) throw new Error(`The file has no ${{ra:"RA_ICRS",dec:"DE_ICRS",plx:"Plx"}[k]} column. It needs at least RA_ICRS, DE_ICRS and Plx.`);
+  const str=(r,k)=>C[k]<0?"":(r[C[k]]||"").trim();
+  const num=(r,k)=>{ const v=str(r,k); return v===""?NaN:+v; };
+  const seen=new Set(), body=rows.slice(1).filter(r=>{ const k=r.map(x=>x.trim()).join(","); if(seen.has(k)) return false; seen.add(k); return true; });
+  return body.map(r=>({ra:num(r,"ra"),dec:num(r,"dec"),plx:num(r,"plx"),eplx:num(r,"eplx"),pmra:num(r,"pmra"),pmde:num(r,"pmde"),
+    g:num(r,"g"),v:num(r,"v"),bprp:num(r,"bprp"),bv:num(r,"bv"),src:str(r,"src"),hip:parseInt(str(r,"hip"))||0,hd:(n=>n>0?String(n):"")(parseInt(str(r,"hd").replace(/^HD\s*/i,""))),name:/^[\d.\s-]*$/.test(str(r,"name"))?"":str(r,"name")}));
+}
+// Bright Star Catalogue designations ("9Alp CMa", "35    Leo", "Alp1Cen") → "α CMa", "35 Leo", "α¹ Cen"
+const GREEK={Alp:"α",Bet:"β",Gam:"γ",Del:"δ",Eps:"ε",Zet:"ζ",Eta:"η",The:"θ",Iot:"ι",Kap:"κ",Lam:"λ",Mu:"μ",Nu:"ν",Xi:"ξ",Omi:"ο",Pi:"π",Rho:"ρ",Sig:"σ",Tau:"τ",Ups:"υ",Phi:"φ",Chi:"χ",Psi:"ψ",Ome:"ω"};
+const SUP={1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹"};
+function bscName(raw){
+  const m=raw.match(/^(\d{1,3})?\s*([A-Z][a-z]{1,2})?\s*(\d)?\s*([A-Z][A-Za-z]{2})$/);
+  if(!m || (m[2] && !GREEK[m[2]]) || (!m[1] && !m[2])) return {label:raw.replace(/\s+/g," "), flam:"", alt:""};
+  const [,fl,by,sup,con]=m;
+  const bayer = by ? `${GREEK[by]}${sup?SUP[sup]:""} ${con}` : "";
+  const flam = fl ? `${fl} ${con}` : "";
+  return {label: bayer||flam, flam: bayer?flam:"", alt: by?`${by}${sup||""} ${con} ${by} ${con} ${GREEK[by]} ${con}`:""};
+}
+// approximate B−V → BP−RP, used only to colour the dots and to sort mixed colours
+const bvToBpRp = bv => 0.0981+1.4290*bv-0.0269*bv*bv+0.0061*bv*bv*bv;
+function makeStars(rows){
+  const used=new Set();
+  return rows.filter(r=>isFinite(r.ra)&&isFinite(r.dec)&&r.plx>0).map(r=>{
+    const s={ra:r.ra,dec:r.dec,plx:r.plx,eplx:isFinite(r.eplx)?r.eplx:0,pmra:isFinite(r.pmra)?r.pmra:0,pmde:isFinite(r.pmde)?r.pmde:0,
+      src:r.src,hip:r.hip,hd:r.hd,name:r.name};
+    s.gaia = s.src!=="";
+    s.ep = 2457389.0;  // all positions in the catalog are at epoch J2016.0
+    s.id = s.gaia ? s.src : s.hip ? `HIP${s.hip}` : s.hd ? `HD${s.hd}` : `RADEC${s.ra.toFixed(5)}${s.dec.toFixed(5)}`;
+    // magnitude: V if available, else G
+    if(isFinite(r.v)){ s.mag=r.v; s.band="V"; } else if(isFinite(r.g)){ s.mag=r.g; s.band="G"; } else { s.mag=NaN; s.band=""; }
+    // colour: BP−RP if available, else B−V
+    if(isFinite(r.bprp)){ s.col=r.bprp; s.cband="BP−RP"; s.ci=r.bprp; } else if(isFinite(r.bv)){ s.col=r.bv; s.cband="B−V"; s.ci=bvToBpRp(r.bv); } else { s.col=null; s.cband=""; s.ci=null; }
+    s.dist=3261.56/s.plx; s.edist=s.dist*s.eplx/s.plx;
+    // identifiers in preferred order: Name, HD, HIP, Gaia
+    const bn = s.name ? bscName(s.name) : null; if(bn) s.name=bn.label;
+    const ids=[]; if(s.name) ids.push(s.name); if(bn&&bn.flam) ids.push(bn.flam); if(s.hd) ids.push(`HD ${s.hd}`); if(s.hip) ids.push(`HIP ${s.hip}`); if(s.gaia) ids.push(`Gaia DR3 ${s.src}`);
+    if(!ids.length) ids.push(`${fmtRA(s.ra)} ${fmtDec(s.dec)}`);
+    s.label=ids[0]; s.ident=ids.slice(1).join(" · ");
+    s.search=(ids.join(" ")+" "+(bn?bn.alt+" "+bn.flam:"")+" "+s.src+(s.hd?" hd"+s.hd:"")+(s.hip?" hip"+s.hip:"")).toLowerCase();
+    s.color=bprpColor(s.ci);
+    let id=s.id, k=2; while(used.has(id)) id=`${s.id}-${k++}`; s.id=id; used.add(id);
+    return s; });
+}
+
+// ---------- colours ----------
+const RAMP=[[-0.3,[157,180,255]],[0.4,[228,236,255]],[0.9,[255,243,223]],[1.4,[255,215,163]],[2.2,[255,179,107]],[3.5,[255,133,70]]];
+function bprpColor(b){ if(b==null||!isFinite(b)) return "rgb(220,220,230)"; if(b<=RAMP[0][0]) return `rgb(${RAMP[0][1]})`;
+  for(let i=1;i<RAMP.length;i++){ if(b<=RAMP[i][0]){ const [x0,c0]=RAMP[i-1],[x1,c1]=RAMP[i],f=(b-x0)/(x1-x0); return `rgb(${c0.map((v,k)=>Math.round(v+(c1[k]-v)*f))})`; } }
+  return `rgb(${RAMP[RAMP.length-1][1]})`; }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- state & DOM ----------
+const $=id=>document.getElementById(id);
+const state={ site:null, night:null, win:null, results:[], shown:[], sort:{k:"dist",dir:1}, sel:null, skyFrac:0.5 };
+const ALLSITES={};
+(function buildSiteSelect(){ const sel=$("site");
+  for(const [region,list] of SITES){ const og=document.createElement("optgroup"); og.label=region;
+    for(const [id,name,lat,lon,elev,tz] of list){ ALLSITES[id]={id,name,lat,lon,elev,tz}; const o=new Option(name,id); og.append(o); } sel.append(og); }
+  const og=document.createElement("optgroup"); og.label="Other"; og.append(new Option("Custom location…","custom")); sel.append(og);
+  sel.value="mtwilson";
+  try{ const dl=$("tzlist"); (Intl.supportedValuesOf?Intl.supportedValuesOf("timeZone"):[]).forEach(z=>dl.append(new Option(z))); }catch(e){}
+})();
+
+function currentSite(){ const v=$("site").value; $("custom").hidden = v!=="custom";
+  if(v!=="custom") return ALLSITES[v];
+  let tz=$("ctz").value.trim(); const ok=validTz(tz); if(!ok) tz="UTC";
+  return {id:"custom",name:"Custom location",lat:Math.max(-90,Math.min(90,+$("clat").value||0)),lon:((+$("clon").value||0)+540)%360-180,elev:null,tz,badTz:!ok}; }
+
+function nightOf(){ // events for the night starting on the chosen date
+  const site=state.site, [y,m,d]=$("date").value.split("-").map(Number);
+  const noon=Date.UTC(y,m-1,d,12)-site.lon/15*HOUR;
+  const ev={noon}; for(const h of [-0.833,-6,-12,-18]) ev[h]=sunCross(noon,site,h);
+  ev.alwaysUp=sunAlt(noon+12*HOUR,site)>-0.833 && ev[-0.833].set===null; return ev; }
+
+function defaultWindow(){ const ev=state.night, want=+$("twi").value; const order=[-18,-12,-6,-0.833];
+  const names={"-18":"astronomical","-12":"nautical","-6":"civil","-0.833":"sunset/sunrise"};
+  for(const h of order.slice(order.indexOf(want))){ const c=ev[h]; if(c.set!==null && c.rise!==null)
+    return {t0:c.set,t1:c.rise,note: h===want?"":`The Sun never reaches ${want}° tonight here, so the window uses ${names[h]} twilight.`}; }
+  if(ev.alwaysUp) return {t0:ev.noon+10*HOUR,t1:ev.noon+14*HOUR,note:"The Sun does not set on this night here. Showing four hours around midnight."};
+  return {t0:ev.noon,t1:ev.noon+DAY,note:"The Sun stays below the horizon all day. The window covers the full 24 hours."}; }
+
+function setWindowInputs(){ const w=defaultWindow(), tz=state.site.tz; $("t0").value=hm(w.t0,tz); $("t1").value=hm(w.t1,tz); state.winDefaultNote=w.note; }
+
+function readWindow(){ const tz=state.site.tz, [y,m,d]=$("date").value.split("-").map(Number);
+  const parse=(v,fallback)=>{ const [h,mi]=(v||fallback).split(":").map(Number); return [h,mi]; };
+  const [h0,m0]=parse($("t0").value,"20:00"), [h1,m1]=parse($("t1").value,"05:00");
+  const nd=new Date(Date.UTC(y,m-1,d+1)); const ny=nd.getUTCFullYear(), nm=nd.getUTCMonth()+1, ndd=nd.getUTCDate();
+  let t0 = h0>=12 ? zonedToUtc(y,m,d,h0,m0,tz) : zonedToUtc(ny,nm,ndd,h0,m0,tz);
+  let t1 = h1>=12 ? zonedToUtc(y,m,d,h1,m1,tz) : zonedToUtc(ny,nm,ndd,h1,m1,tz);
+  if(t1<=t0) t1+=DAY;
+  return {t0,t1}; }
+
+// ---------- core computation ----------
+const wrapPi = x => { x=(x+Math.PI)%(2*Math.PI); if(x<0) x+=2*Math.PI; return x-Math.PI; };
+function haLimit(){ const v=$("maxha").value.trim(); if(v==="") return Infinity; const h=Math.max(0,Math.min(12,+v)); return isFinite(h)? h*15*D2R : Infinity; }
+let posCache={key:null};
+function compute(){
+  const site=state.site, {t0,t1}=state.win, dur=t1-t0;
+  const n=Math.max(2,Math.min(600,Math.ceil(dur/(5*MIN)))), step=dur/n;
+  const lat=site.lat*D2R, sl=Math.sin(lat), cl=Math.cos(lat);
+  const lst=new Float64Array(n+1); for(let i=0;i<=n;i++) lst[i]=gmstRad(t0+i*step)+site.lon*D2R;
+  const tmid=(t0+t1)/2, key=Math.round(tmid/DAY)+":"+STARS.length;
+  if(posCache.key!==key){ for(const s of STARS){ const [a,dd]=apparent(s,tmid); s.raA=a; s.decA=dd; s.sd=Math.sin(dd); s.cd=Math.cos(dd); s.raD=((a*R2D)%360+360)%360; s.decD=dd*R2D; }
+    state.epoch=2000+(jd(tmid)-2451545)/365.25; posCache.key=key; }
+  const dmin=+$("dmin").value||0, dmax=+$("dmax").value||1e9, gmax=+$("gmax").value, minAlt=+$("minalt").value||0;
+  const sMin=Math.sin(minAlt*D2R), needV=$("need").value, needH = needV==="all"?Infinity:+needV, haMax=haLimit();
+  const out=[];
+  for(const s of STARS){
+    if(s.dist<dmin || s.dist>dmax || !(s.mag<=gmax || !isFinite(s.mag))) continue;
+    // quick reject: star never reaches the limit at this latitude
+    if(90-Math.abs(site.lat-s.decA*R2D) < minAlt) continue;
+    let best=-2, bi=0, cnt=0, first=-1, last=-1;
+    const a=sl*s.sd, b=cl*s.cd;
+    for(let i=0;i<=n;i++){ const H=lst[i]-s.raA, v=a+b*Math.cos(H);
+      if(v>=sMin && (haMax>=Math.PI || Math.abs(wrapPi(H))<=haMax)){ cnt++; if(first<0)first=i; last=i; if(v>best){best=v;bi=i;} } }
+    if(cnt===0) continue;
+    const hrs = cnt===n+1 ? dur/HOUR : Math.max(0,(last-first))*step/HOUR;
+    if(needV==="all" ? cnt!==n+1 : hrs < needH) continue;
+    out.push({s, maxAlt:Math.asin(best)*R2D, tBest:t0+bi*step, hrs, tUp:t0+first*step, tDown:t0+last*step});
+  }
+  state.results=out;
+}
+
+// ---------- rendering ----------
+const fmtRA = ra => { let h=ra/15, hh=Math.floor(h), mm=Math.floor((h-hh)*60), ss=((h-hh)*60-mm)*60; if(ss>=59.95){ss=0;mm++;} if(mm>=60){mm=0;hh=(hh+1)%24;} return `${String(hh).padStart(2,"0")}h ${String(mm).padStart(2,"0")}m ${ss.toFixed(1).padStart(4,"0")}s`; };
+const fmtDec = dec => { const sg=dec<0?"−":"+"; let a=Math.abs(dec), dd=Math.floor(a), mm=Math.floor((a-dd)*60), ss=Math.round(((a-dd)*60-mm)*60); if(ss===60){ss=0;mm++;} if(mm===60){mm=0;dd++;} return `${sg}${String(dd).padStart(2,"0")}° ${String(mm).padStart(2,"0")}′ ${String(ss).padStart(2,"0")}″`; };
+const lightLeft = (dist, ms) => { const t=ms - dist*365.25*DAY; return new Date(t).toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"UTC"}); };
+const magTxt = s => isFinite(s.mag) ? `${s.mag.toFixed(2).replace("-","−")}<small class="band">${s.band}</small>` : "—";
+const colTxt = s => s.col==null ? "—" : `${s.col.toFixed(2).replace("-","−")}<small class="band">${s.cband}</small>`;
+const fmtH = h => h>=0.995 ? `${h.toFixed(1)} h` : `${Math.round(h*60)} min`;
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const simbadId = s => s.gaia ? "Gaia DR3 "+s.src : s.hip ? "HIP "+s.hip : s.hd ? "HD "+s.hd : s.name;
+const simbad = s => `https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${encodeURIComponent(simbadId(s))}`;
+
+function renderSummary(){ const ev=state.night, tz=state.site.tz, w=state.win, ab=tzAbbr(w.t0,tz);
+  const t=(c,k)=> c[k]===null?"—":hm(c[k],tz);
+  const mo=moonIllum((w.t0+w.t1)/2);
+  const twi=+$("twi").value, tn={"-6":"Civil","-12":"Nautical","-18":"Astro."}[twi];
+  $("summary").innerHTML=`
+    <div class="ev"><div class="lbl">Night of</div><div class="v">${esc(longDate(w.t0,tz))}</div><div class="sub">${esc(state.site.name)}</div></div>
+    <div class="ev"><div class="lbl">Sunset</div><div class="v">${t(ev[-0.833],"set")}</div><div class="sub">${ab}</div></div>
+    <div class="ev"><div class="lbl">${tn} dusk ends</div><div class="v">${t(ev[twi],"set")}</div><div class="sub">Sun ${twi}°</div></div>
+    <div class="ev dark"><div class="lbl">Your window</div><div class="v">${hm(w.t0,tz)}–${hm(w.t1,tz)}</div><div class="sub">${((w.t1-w.t0)/HOUR).toFixed(1)} hours</div></div>
+    <div class="ev"><div class="lbl">${tn} dawn begins</div><div class="v">${t(ev[twi],"rise")}</div><div class="sub">Sun ${twi}°</div></div>
+    <div class="ev"><div class="lbl">Sunrise</div><div class="v">${t(ev[-0.833],"rise")}</div><div class="sub">${ab}</div></div>
+    <div class="ev"><div class="lbl">Moon</div><div class="v">${Math.round(mo.k*100)}%</div><div class="sub">${mo.waxing?"waxing":"waning"}, mid-window</div></div>`;
+}
+
+function sorted(){ const {k,dir}=state.sort, q=$("q").value.trim().toLowerCase();
+  let r=state.results; if(q) r=r.filter(x=>x.s.search.includes(q));
+  const val = x => k==="name"?x.s.label.toLowerCase():(k in x?x[k]:x.s[k]);
+  return [...r].sort((a,b)=>{ const va=val(a), vb=val(b); if(va==null) return 1; if(vb==null) return -1; return (va<vb?-1:va>vb?1:0)*dir; }); }
+
+function renderTable(){ const ep=`J${state.epoch.toFixed(2)}`;
+  $("thra").textContent=`RA (${ep})`; $("thdec").textContent=`Dec (${ep})`;
+  $("thra").title=$("thdec").title=`Mean equator and equinox of date (${ep}), proper motion applied to the same date`;
+  const tz=state.site.tz, rows=sorted(); state.shown=rows; const ms=(state.win.t0+state.win.t1)/2;
+  $("count").innerHTML = `<b>${rows.length.toLocaleString()}</b> of ${STARS.length.toLocaleString()} stars match`;
+  document.querySelectorAll("#tbl th").forEach(th=>{ th.removeAttribute("aria-sort"); });
+  const idx=[...document.querySelectorAll("#tbl th")].findIndex(th=>th.dataset.k===state.sort.k);
+  if(idx>=0) document.querySelectorAll("#tbl th")[idx].setAttribute("aria-sort",state.sort.dir>0?"ascending":"descending");
+  if(!rows.length){ $("tbody").innerHTML=`<tr><td colspan="9" class="empty">No stars match. Try a wider distance range, a lower altitude limit, or a shorter required time.</td></tr>`; return; }
+  const winH=(state.win.t1-state.win.t0)/HOUR;
+  $("tbody").innerHTML = rows.map(x=>{ const s=x.s; return `<tr data-src="${s.id}"${state.sel===s.id?' class="sel"':""}>
+    <td><div class="sname"><span class="chip" style="background:${s.color}"></span><div>${esc(s.label)}${s.ident?`<small>${esc(s.ident)}</small>`:""}</div></div></td>
+    <td class="n">${fmtRA(s.raD)}</td><td class="n">${fmtDec(s.decD)}</td>
+    <td class="n">${s.dist.toFixed(2)}</td>
+    <td class="n">${magTxt(s)}</td><td class="n">${colTxt(s)}</td>
+    <td class="n">${x.maxAlt.toFixed(1)}°</td><td class="n">${hm(x.tBest,tz)}</td>
+    <td class="n"><span class="bar" style="width:${Math.round(40*x.hrs/winH)}px"></span>${fmtH(x.hrs)}</td></tr>`; }).join("");
+}
+
+// sky map
+const sky=$("sky"); let skyPts=[];
+function skyTime(){ const w=state.win; return w.t0+(w.t1-w.t0)*state.skyFrac; }
+function drawSky(){
+  const wrap=$("skywrap"), dpr=window.devicePixelRatio||1, W=wrap.clientWidth; if(!W) return;
+  sky.width=W*dpr; sky.height=W*dpr; const c=sky.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+  const cx=W/2, cy=W/2, R=W/2-22, site=state.site, t=skyTime(), lst=gmstRad(t)+site.lon*D2R, lat=site.lat*D2R;
+  $("skytime").textContent = `${hm(t,site.tz)} ${tzAbbr(t,site.tz)}`;
+  c.clearRect(0,0,W,W);
+  const g=c.createRadialGradient(cx,cy,0,cx,cy,R); g.addColorStop(0,"#121c38"); g.addColorStop(1,"#0a1024");
+  c.fillStyle=g; c.beginPath(); c.arc(cx,cy,R,0,7); c.fill();
+  c.strokeStyle=css("--sky-ring"); c.lineWidth=1;
+  for(const a of [0,30,60]){ c.beginPath(); c.arc(cx,cy,R*(90-a)/90,0,7); c.stroke(); }
+  for(let k=0;k<4;k++){ const az=k*Math.PI/2; c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx-R*Math.sin(az),cy-R*Math.cos(az)); c.stroke(); }
+  const minAlt=+$("minalt").value||0; c.setLineDash([4,4]); c.strokeStyle=css("--sky-limit"); c.beginPath(); c.arc(cx,cy,R*(90-minAlt)/90,0,7); c.stroke(); c.setLineDash([]);
+  c.fillStyle=css("--sky-text"); c.font="600 12px "+css("--f-body"); c.textAlign="center"; c.textBaseline="middle";
+  [["N",0],["E",90],["S",180],["W",270]].forEach(([l,a])=>{ const az=a*D2R; c.fillText(l,cx-(R+12)*Math.sin(az),cy-(R+12)*Math.cos(az)); });
+  c.font="10px "+css("--f-mono"); c.textAlign="left"; [30,60].forEach(a=>c.fillText(a+"°",cx+3,cy-R*(90-a)/90+8));
+  // moon & sun hint
+  skyPts=[]; const sMin=minAlt*D2R, haMax=haLimit(); let up=0;
+  const items=state.results.slice().sort((a,b)=>(isFinite(b.s.mag)?b.s.mag:99)-(isFinite(a.s.mag)?a.s.mag:99));
+  for(const x of items){ const s=x.s, [alt,az]=altAz(s.raA,s.decA,lst,lat); if(alt<0) continue;
+    const r=R*(90-alt*R2D)/90, px=cx-r*Math.sin(az), py=cy-r*Math.cos(az), rad=Math.max(1.1,Math.min(6,1+(12-(isFinite(s.mag)?s.mag:12))*0.45));
+    const ok=alt>=sMin && Math.abs(wrapPi(lst-s.raA))<=haMax; if(ok) up++;
+    c.globalAlpha= ok?1:0.35; c.fillStyle=s.color; c.beginPath(); c.arc(px,py,rad,0,7); c.fill();
+    skyPts.push({px,py,x,alt:alt*R2D,az:az*R2D}); }
+  c.globalAlpha=1;
+  const sel=skyPts.find(p=>p.x.s.id===state.sel);
+  if(sel){ c.strokeStyle="#f0b653"; c.lineWidth=2; c.beginPath(); c.arc(sel.px,sel.py,10,0,7); c.stroke(); }
+  $("skycount").textContent=`${up} observable now · ${skyPts.length} above horizon`;
+}
+function nearest(ev){ const r=sky.getBoundingClientRect(), mx=ev.clientX-r.left, my=ev.clientY-r.top; let best=null, bd=144;
+  for(const p of skyPts){ const d=(p.px-mx)**2+(p.py-my)**2; if(d<bd){bd=d;best=p;} } return best; }
+sky.addEventListener("mousemove",ev=>{ const p=nearest(ev), tip=$("tip"); if(!p){tip.hidden=true;return;}
+  tip.hidden=false; tip.style.left=p.px+"px"; tip.style.top=p.py+"px";
+  tip.textContent=`${p.x.s.label} · ${p.x.s.dist.toFixed(1)} ly · alt ${p.alt.toFixed(0)}° az ${p.az.toFixed(0)}°`; });
+sky.addEventListener("mouseleave",()=>$("tip").hidden=true);
+sky.addEventListener("click",ev=>{ const p=nearest(ev); if(p) select(p.x.s.id,true); });
+
+function select(src,scroll){ state.sel=src;
+  document.querySelectorAll("#tbody tr.sel").forEach(r=>r.classList.remove("sel"));
+  const tr=document.querySelector(`#tbody tr[data-src="${src}"]`); if(tr){ tr.classList.add("sel"); if(scroll) tr.scrollIntoView({block:"nearest"}); }
+  drawSky(); renderDetail(); }
+
+function renderDetail(){ const box=$("detail"); const x=state.results.find(r=>r.s.id===state.sel);
+  if(!x){ const top=state.shown[0];
+    box.innerHTML=`<h2>Pick a star</h2><p class="note">Click a row in the table or a dot on the sky map to see its altitude through the night${top?`. The highest-ranked match right now is <b>${esc(top.s.label)}</b>.`:"."}</p>`; return; }
+  const s=x.s, tz=state.site.tz, ms=(state.win.t0+state.win.t1)/2;
+  box.innerHTML=`<h2><span class="chip" style="background:${s.color}"></span>${esc(s.label)}</h2>
+    <div class="kv">
+      <div><div class="lbl">Distance</div><div class="v">${s.dist.toFixed(2)} ± ${s.edist.toFixed(2)} ly</div></div>
+      <div><div class="lbl">Light left</div><div class="v">${lightLeft(s.dist,ms)}</div></div>
+      <div><div class="lbl">Highest while observable</div><div class="v">${x.maxAlt.toFixed(1)}° at ${hm(x.tBest,tz)}</div></div>
+      <div><div class="lbl">Observable</div><div class="v">${hm(x.tUp,tz)}–${hm(x.tDown,tz)}</div></div>
+      <div><div class="lbl">Transit</div><div class="v">${transitInfo(s)}</div></div>
+      <div><div class="lbl">Magnitude</div><div class="v">${isFinite(s.mag)?`${s.mag.toFixed(2)} ${s.band}`:"—"}</div></div>
+      <div><div class="lbl">Colour</div><div class="v">${s.col==null?"—":`${s.col.toFixed(2)} ${s.cband}`}</div></div>
+      <div><div class="lbl">Proper motion</div><div class="v">${(Math.hypot(s.pmra,s.pmde)/1000).toFixed(3)}″/yr</div></div>
+    </div>
+    <canvas id="altc" aria-label="Altitude of ${esc(s.label)} through the observing window"></canvas>
+    <p class="note">${esc([s.label,s.ident].filter(Boolean).join(" · "))} · <a href="${simbad(s)}" target="_blank" rel="noopener">Open in SIMBAD</a></p>`;
+  drawAlt(x); }
+
+function transitInfo(s){ const w=state.win, site=state.site;
+  // find time in/near the window when HA = 0
+  const H0=wrapPi(gmstRad(w.t0)+site.lon*D2R-s.raA); let dt=-H0/(1.00273791*15*D2R)*HOUR; if(dt<-(w.t1-w.t0)/2-6*HOUR) dt+=23.9345*HOUR;
+  const tt=w.t0+dt, alt=90-Math.abs(site.lat-s.decA*R2D); return `${hm(tt,site.tz)} · ${alt.toFixed(1)}°${(tt<w.t0||tt>w.t1)?" (outside window)":""}`; }
+function drawAlt(x){ const cv=$("altc"); if(!cv) return; const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=150;
+  cv.width=W*dpr; cv.height=H*dpr; const c=cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+  const site=state.site, w=state.win, s=x.s, L=34, Rm=8, T=8, B=22, pw=W-L-Rm, ph=H-T-B, lat=site.lat*D2R;
+  const X=t=>L+pw*(t-w.t0)/(w.t1-w.t0), Y=a=>T+ph*(1-Math.max(0,a)/90);
+  const ink=css("--ink"), muted=css("--muted"), line=css("--line"), acc=css("--accent");
+  c.font="10px "+css("--f-mono"); c.fillStyle=muted; c.strokeStyle=line; c.lineWidth=1; c.textBaseline="middle"; c.textAlign="right";
+  for(const a of [0,30,60,90]){ c.beginPath(); c.moveTo(L,Y(a)); c.lineTo(L+pw,Y(a)); c.stroke(); c.fillText(a+"°",L-5,Y(a)); }
+  c.textAlign="center"; c.textBaseline="top";
+  let h0=Math.ceil(w.t0/HOUR)*HOUR; const span=(w.t1-w.t0)/HOUR, every=span>9?2:1;
+  for(let t=h0;t<=w.t1;t+=HOUR){ const lab=hm(t,site.tz); if(+lab.slice(0,2)%every) continue; c.beginPath(); c.moveTo(X(t),T); c.lineTo(X(t),T+ph); c.stroke(); c.fillText(lab,X(t),T+ph+5); }
+  const haMax=haLimit(); if(haMax<Math.PI){ c.fillStyle=line; c.globalAlpha=.45;
+    const N=240; for(let i=0;i<N;i++){ const ta=w.t0+(w.t1-w.t0)*i/N, tb=w.t0+(w.t1-w.t0)*(i+1)/N, tm=(ta+tb)/2;
+      if(Math.abs(wrapPi(gmstRad(tm)+site.lon*D2R-s.raA))>haMax) c.fillRect(X(ta),T,X(tb)-X(ta)+0.5,ph); } c.globalAlpha=1; }
+  const minAlt=+$("minalt").value||0; c.setLineDash([4,3]); c.strokeStyle=acc; c.beginPath(); c.moveTo(L,Y(minAlt)); c.lineTo(L+pw,Y(minAlt)); c.stroke(); c.setLineDash([]);
+  const pts=[]; for(let i=0;i<=120;i++){ const t=w.t0+(w.t1-w.t0)*i/120; const [alt]=altAz(s.raA,s.decA,gmstRad(t)+site.lon*D2R,lat); pts.push([X(t),Y(alt*R2D)]); }
+  c.beginPath(); c.moveTo(pts[0][0],Y(0)); pts.forEach(p=>c.lineTo(p[0],p[1])); c.lineTo(pts[pts.length-1][0],Y(0)); c.closePath();
+  c.globalAlpha=.15; c.fillStyle=css("--sel"); c.fill(); c.globalAlpha=1;
+  c.beginPath(); pts.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1])); c.strokeStyle=css("--sel"); c.lineWidth=2; c.stroke();
+  const tm=skyTime(); c.strokeStyle=ink; c.lineWidth=1; c.globalAlpha=.5; c.beginPath(); c.moveTo(X(tm),T); c.lineTo(X(tm),T+ph); c.stroke(); c.globalAlpha=1;
+  c.fillStyle=ink; c.beginPath(); c.arc(X(x.tBest),Y(x.maxAlt),3.5,0,7); c.fill();
+}
+
+// distance histogram
+function drawHist(){ const cv=$("hist"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=56; if(!W) return;
+  cv.width=W*dpr; cv.height=H*dpr; const c=cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+  const max=+$("rmax").max, nb=50, bw=max/nb, bins=new Array(nb).fill(0); for(const s of STARS){ const k=Math.min(nb-1,Math.floor(s.dist/bw)); if(k>=0) bins[k]++; }
+  const top=Math.max(...bins), dmin=+$("dmin").value||0, dmax=+$("dmax").value||max, pad=8, pw=W-2*pad;
+  const acc=css("--accent"), line=css("--line");
+  bins.forEach((v,i)=>{ const x0=pad+pw*i/nb, x1=pad+pw*(i+1)/nb, h=(H-12)*Math.sqrt(v/top); const lo=i*bw, hi=lo+bw;
+    c.fillStyle= (hi>dmin && lo<dmax) ? acc : line; c.fillRect(x0+0.5,H-12-h,Math.max(1,x1-x0-1),h); });
+  c.fillStyle=css("--muted"); c.font="10px "+css("--f-mono"); c.textBaseline="bottom";
+  for(let d=0; d<=max; d+= max>60?25:10){ c.textAlign=d===0?"left":d===max?"right":"center"; c.fillText(d,pad+pw*d/max,H); }
+}
+
+// ---------- wiring ----------
+let raf=0; function schedule(what){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>run(what)); }
+function run(what){
+  if(what==="site"||what==="date"||what==="twi"){ state.night=nightOf(); setWindowInputs(); }
+  state.win=readWindow();
+  const isDefault = (()=>{ const d=defaultWindow(); return Math.abs(d.t0-state.win.t0)<MIN*1.5 && Math.abs(d.t1-state.win.t1)<MIN*1.5; })();
+  const notes=[]; if(state.site.badTz) notes.push(`“${$("ctz").value}” is not a recognised time zone, so UTC is used.`);
+  if(isDefault && state.winDefaultNote) notes.push(state.winDefaultNote);
+  if(!isDefault) notes.push("Custom window.");
+  $("winnote").textContent=notes.join(" "); $("winnote").className="note"+((state.site.badTz||(isDefault&&state.winDefaultNote))?" warn":"");
+  const now=Date.now(); if(what!=="sky" && now>state.win.t0 && now<state.win.t1) state.skyFrac=(now-state.win.t0)/(state.win.t1-state.win.t0);
+  $("skyT").value=Math.round(state.skyFrac*1000);
+  const a=+$("minalt").value||0, hl=haLimit();
+  $("airmass").textContent = (a>0 ? `Airmass ≤ ${(1/Math.sin(a*D2R)).toFixed(2)}.` : "Anything above the horizon counts.") + (hl<Math.PI ? ` Only times within ±${(hl*R2D/15).toFixed(2).replace(/\.?0+$/,"")} h of the meridian count.` : " No hour-angle limit.");
+  compute(); renderSummary(); renderTable(); drawSky(); renderDetail(); drawHist();
+}
+function updateSite(){ const s=currentSite(); state.site=s;
+  $("siteinfo").textContent=`${Math.abs(s.lat).toFixed(4)}°${s.lat>=0?"N":"S"}  ${Math.abs(s.lon).toFixed(4)}°${s.lon>=0?"E":"W"}${s.elev?`  ${s.elev.toLocaleString()} m`:""}  ${s.tz}`; }
+
+function setToday(){ $("date").value=ymd(Date.now(),state.site.tz); }
+
+$("site").addEventListener("change",()=>{ updateSite(); setToday(); schedule("site"); });
+["clat","clon","ctz"].forEach(id=>$(id).addEventListener("change",()=>{ updateSite(); schedule("site"); }));
+$("date").addEventListener("change",()=>{ if(!$("date").value) setToday(); schedule("date"); });
+$("today").addEventListener("click",()=>{ setToday(); schedule("date"); });
+$("twi").addEventListener("change",()=>schedule("twi"));
+$("resetwin").addEventListener("click",()=>schedule("twi"));
+["t0","t1"].forEach(id=>$(id).addEventListener("change",()=>schedule("win")));
+["minalt","need","gmax","maxha"].forEach(id=>$(id).addEventListener("input",()=>schedule("filter")));
+$("q").addEventListener("input",()=>{ renderTable(); });
+
+function syncDist(src){ let lo=+$("dmin").value, hi=+$("dmax").value;
+  if(src==="range"){ lo=+$("rmin").value; hi=+$("rmax").value; }
+  if(lo>hi){ if(src==="rmin"||document.activeElement===$("rmin")||document.activeElement===$("dmin")) hi=lo; else lo=hi; }
+  $("dmin").value=lo; $("dmax").value=hi; $("rmin").value=lo; $("rmax").value=hi; schedule("filter"); }
+["rmin","rmax"].forEach(id=>$(id).addEventListener("input",()=>syncDist("range")));
+["dmin","dmax"].forEach(id=>$(id).addEventListener("change",()=>syncDist("num")));
+
+$("bdaygo").addEventListener("click",()=>{ const b=$("bday").value; if(!b){ $("bdaynote").textContent="Enter your birth date first."; $("bdaynote").className="note warn"; return; }
+  const [y,m,d]=b.split("-").map(Number), born=Date.UTC(y,m-1,d), obs=(state.win.t0+state.win.t1)/2;
+  const age=(obs-born)/(365.25*DAY); if(age<=0){ $("bdaynote").textContent="That date is after the observing night."; $("bdaynote").className="note warn"; return; }
+  const lo=Math.max(0,age-0.5), hi=age+0.5; $("dmin").value=lo.toFixed(2); $("dmax").value=hi.toFixed(2);
+  const maxD=+$("rmax").max; $("rmin").value=Math.min(lo,maxD); $("rmax").value=Math.min(hi,maxD);
+  $("bdaynote").className="note";
+  $("bdaynote").textContent = age>maxD ? `You are ${age.toFixed(1)} light-years old on this night, beyond this catalog's ${maxD} ly reach.` : `On this night you are ${age.toFixed(2)} years old, so your stars lie ${lo.toFixed(1)}–${hi.toFixed(1)} ly away.`;
+  schedule("filter"); });
+
+document.querySelectorAll("#tbl th").forEach(th=>th.addEventListener("click",()=>{ const k=th.dataset.k;
+  state.sort = state.sort.k===k ? {k,dir:-state.sort.dir} : {k,dir:(k==="name"||k==="dist"||k==="mag"||k==="raD"||k==="tBest")?1:-1}; renderTable(); }));
+$("tbody").addEventListener("click",ev=>{ const tr=ev.target.closest("tr[data-src]"); if(tr) select(tr.dataset.src,false); });
+
+$("skyT").addEventListener("input",()=>{ state.skyFrac=+$("skyT").value/1000; drawSky(); const x=state.results.find(r=>r.s.id===state.sel); if(x) drawAlt(x); });
+let playT=0; $("play").addEventListener("click",()=>{ const b=$("play"); if(playT){ clearInterval(playT); playT=0; b.textContent="▶ Play"; b.setAttribute("aria-pressed","false"); return; }
+  b.textContent="❚❚ Pause"; b.setAttribute("aria-pressed","true");
+  playT=setInterval(()=>{ state.skyFrac=(state.skyFrac+0.004)%1; $("skyT").value=Math.round(state.skyFrac*1000); drawSky(); },40); });
+
+$("copy").addEventListener("click",async()=>{ const tz=state.site.tz;
+  const head=`name,hd,hip,gaia_dr3,ra_icrs_j2016_deg,dec_icrs_j2016_deg,ra_J${state.epoch.toFixed(2)}_deg,dec_J${state.epoch.toFixed(2)}_deg,dist_ly,mag,mag_band,colour,colour_index,max_alt_deg,highest_at_local,hours_observable`;
+  const body=state.shown.map(x=>{ const s=x.s; return [`"${s.label.replace(/"/g,'""')}"`,s.hd,s.hip||"",s.src,s.ra,s.dec,s.raD.toFixed(6),s.decD.toFixed(6),s.dist.toFixed(3),isFinite(s.mag)?s.mag:"",s.band,s.col??"",s.cband.replace("−","-"),x.maxAlt.toFixed(2),hm(x.tBest,tz),x.hrs.toFixed(2)].join(","); });
+  const text=[head,...body].join("\n"), b=$("copy");
+  try{ await navigator.clipboard.writeText(text); b.textContent=`Copied ${body.length} rows`; }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=text; document.body.append(ta); ta.select(); try{ document.execCommand("copy"); b.textContent=`Copied ${body.length} rows`; }catch(_){ b.textContent="Copy failed"; } ta.remove(); }
+  setTimeout(()=>b.textContent="Copy table as CSV",2000); });
+
+$("file").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ try{ const rows=parseCsv(rd.result); const st=makeStars(rows); if(!st.length) throw new Error("No usable rows were found in that file.");
+      STARS=st; CATNAME=f.name; posCache.key=null; state.sel=null; initCatalog(); schedule("filter"); }
+    catch(e){ $("catsrc").textContent=e.message; } };
+  rd.readAsText(f); });
+
+$("nv").addEventListener("click",()=>{ const on=document.documentElement.classList.toggle("nightvision"); $("nv").setAttribute("aria-pressed",on); try{ localStorage.setItem("bsf-nv",on?"1":""); }catch(e){} });
+try{ if(localStorage.getItem("bsf-nv")){ document.documentElement.classList.add("nightvision"); $("nv").setAttribute("aria-pressed","true"); } }catch(e){}
+
+function initCatalog(){ const ds=STARS.map(s=>s.dist), decs=STARS.map(s=>s.dec), gs=STARS.map(s=>s.mag).filter(isFinite);
+  const maxD=Math.ceil(Math.max(...ds)/10)*10; ["rmin","rmax"].forEach(id=>$(id).max=maxD);
+  $("dmin").value=0; $("dmax").value=maxD; $("rmin").value=0; $("rmax").value=maxD;
+  const nf=n=>n.toLocaleString();
+  $("catsrc").textContent=`Catalog: ${CATNAME}`;
+  $("nhip").textContent=STARS.filter(s=>!s.gaia).length;
+  const nV=STARS.filter(s=>s.band==="V").length, nBV=STARS.filter(s=>s.cband==="B−V").length, named=STARS.filter(s=>s.name).length, dlo=Math.min(...decs), dhi=Math.max(...decs);
+  $("catstats").textContent=`${nf(STARS.length)} stars within ${Math.round(Math.max(...ds))} light-years, magnitude ${Math.min(...gs).toFixed(1)} to ${Math.max(...gs).toFixed(1)}, declination ${dlo.toFixed(0)}° to +${dhi.toFixed(0)}°. ${named?`${nf(named)} have a Bayer or Flamsteed name. `:""}${nV?`${nf(nV)} use a V magnitude, the rest Gaia G. `:""}${nBV?`${nf(nBV)} use B−V colour where Gaia BP−RP is missing.`:""}${dlo>-60?` Stars south of ${dlo.toFixed(0)}° are not in this file, so far-southern observers will see an empty patch there.`:""}`;
+}
+
+// theme changes repaint canvases
+const repaint=()=>{ drawSky(); drawHist(); renderDetail(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",repaint);
+new MutationObserver(repaint).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+new ResizeObserver(()=>{ drawSky(); drawHist(); const x=state.results.find(r=>r.s.id===state.sel); if(x) drawAlt(x); }).observe(document.querySelector(".grid"));
+
+// boot
+STARS=makeStars(parseCsv($("catalog-csv").textContent)); initCatalog(); updateSite(); setToday();
+state.sel=null; run("site");
+</script>
