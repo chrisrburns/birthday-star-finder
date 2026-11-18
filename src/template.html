@@ -85,7 +85,7 @@ input:hover,select:hover{border-color:var(--muted)}
 .dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--accent);cursor:grab}
 .bday{border-top:1px dashed var(--line);padding-top:10px}
 
-.skypanel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.skypanel{display:flex;flex-direction:row;gap:12px;min-width:0}
 .skycard{background:var(--sky);border-radius:var(--r);padding:14px;color:#dfe5f5;display:flex;flex-direction:column;gap:10px}
 .skyhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .skyhead h2{color:#eef1f8}
@@ -100,7 +100,7 @@ input:hover,select:hover{border-color:var(--muted)}
 .skylegend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sky-text);align-items:center}
 .ramp{display:inline-block;width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#9db4ff,#e4ecff,#fff3df,#ffd7a3,#ffb36b,#ff8546);vertical-align:middle;margin:0 6px}
 
-.detail{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.detail{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:40%}
 .detail h2{display:flex;align-items:center;gap:10px}
 .detail .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 16px}
 .detail .kv div{min-width:0}
@@ -116,7 +116,7 @@ input:hover,select:hover{border-color:var(--muted)}
 .count b{font-family:var(--f-mono);font-weight:500;color:var(--accent)}
 .rtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .rtools input{width:220px}
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);max-height:70vh}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);max-height:40vh}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{padding:7px 10px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
 th{position:sticky;top:0;background:var(--panel);z-index:1;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;cursor:pointer;user-select:none;box-shadow:inset 0 -1px 0 var(--line)}
@@ -547,7 +547,7 @@ const colTxt = s => s.col==null ? "—" : `${s.col.toFixed(2).replace("-","−")
 const fmtH = h => h>=0.995 ? `${h.toFixed(1)} h` : `${Math.round(h*60)} min`;
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const simbadId = s => s.gaia ? "Gaia DR3 "+s.src : s.hip ? "HIP "+s.hip : s.hd ? "HD "+s.hd : s.name;
-const simbad = s => `https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${encodeURIComponent(simbadId(s))}`;
+const simbad = s => `https://simbad.cfa.harvard.edu/simbad/sim-id?Ident=${encodeURIComponent(simbadId(s))}`;
 
 function renderSummary(){ const ev=state.night, tz=state.site.tz, w=state.win, ab=tzAbbr(w.t0,tz);
   const t=(c,k)=> c[k]===null?"—":hm(c[k],tz);
